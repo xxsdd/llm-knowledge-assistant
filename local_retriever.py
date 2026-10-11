@@ -39,9 +39,13 @@ class LocalEmbeddings(Embeddings):
 def get_local_retriever():
     records, vectors, model = load_knowledge()
     digest = hashlib.sha256((KNOWLEDGE_DIR / "documents.json").read_bytes()).hexdigest()[:12]
-    # 小型演示索引从预存向量载入内存，避免 Windows 中文路径的 HNSW 文件问题。
+    # Streamlit 每次提问可能换线程，使用磁盘库保证 SQLite 在不同线程间共享。
+    # Windows 的 HNSW 文件需使用 ASCII 路径；这里仅缓存公开教程向量，无密钥。
     collection_name = f"knowledge_bge_zh_{digest}"
-    client = chromadb.EphemeralClient(settings=Settings(anonymized_telemetry=False))
+    cache_root = (Path(os.getenv("PUBLIC", "C:/Users/Public")) / "Documents" if os.name == "nt" else Path(tempfile.gettempdir()))
+    database_dir = cache_root / "CodexKnowledgeAssistant" / digest
+    database_dir.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(database_dir), settings=Settings(anonymized_telemetry=False))
     collection = client.get_or_create_collection(collection_name, metadata={"hnsw:space": "cosine"})
     if collection.count() == 0:
         collection.add(ids=[str(i) for i in range(len(records))],
