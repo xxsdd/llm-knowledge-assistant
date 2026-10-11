@@ -134,7 +134,10 @@ def main():
                     st.warning("模型没有返回正文，请缩短问题后重试。")
                 else:
                     st.session_state.messages.append(("ai", output))
-            except Exception:
+            except Exception as exc:
+                # 调试时仅在服务端记录经过密钥脱敏的错误，网页不展示内部信息。
+                safe_error = str(exc).replace(os.getenv("ZHIPUAI_API_KEY", ""), "[redacted]")
+                print(f"Knowledge assistant error: {type(exc).__name__}: {safe_error}", flush=True)
                 st.error("暂时无法完成回答。请检查智谱模型额度、云端密钥及网络连接后重试。")
                 st.session_state.messages.pop()
     if st.session_state.get("last_sources"):
