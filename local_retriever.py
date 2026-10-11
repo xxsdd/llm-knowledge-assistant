@@ -39,15 +39,16 @@ class LocalEmbeddings(Embeddings):
 def get_local_retriever():
     records, vectors, model = load_knowledge()
     digest = hashlib.sha256((KNOWLEDGE_DIR / "documents.json").read_bytes()).hexdigest()[:12]
-    database_dir = Path(tempfile.gettempdir()) / "llm-universe-bge-chroma" / digest
-    client = chromadb.PersistentClient(path=str(database_dir), settings=Settings(anonymized_telemetry=False))
-    collection = client.get_or_create_collection("knowledge_bge_zh", metadata={"hnsw:space": "cosine"})
+    # 小型演示索引从预存向量载入内存，避免 Windows 中文路径的 HNSW 文件问题。
+    collection_name = f"knowledge_bge_zh_{digest}"
+    client = chromadb.EphemeralClient(settings=Settings(anonymized_telemetry=False))
+    collection = client.get_or_create_collection(collection_name, metadata={"hnsw:space": "cosine"})
     if collection.count() == 0:
         collection.add(ids=[str(i) for i in range(len(records))],
                        embeddings=vectors.tolist(),
                        documents=[record["text"] for record in records],
                        metadatas=[record["metadata"] for record in records])
-    store = Chroma(client=client, collection_name="knowledge_bge_zh", embedding_function=LocalEmbeddings(model))
+    store = Chroma(client=client, collection_name=collection_name, embedding_function=LocalEmbeddings(model))
     return store.as_retriever(search_kwargs={"k": 4})
 
 def retrieve(question: str):
